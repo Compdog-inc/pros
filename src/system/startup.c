@@ -25,8 +25,10 @@ extern void graphical_context_daemon_initialize(void);
 extern __attribute__((weak)) void display_initialize(void) {}
 extern void rtos_sched_start();
 extern void vdml_initialize();
-extern void invoke_install_hot_table();
 
+#ifdef _VEX_V5
+extern void invoke_install_hot_table();
+#endif
 // XXX: pros_init happens inside __libc_init_array, and before any global
 // C++ constructors are invoked. This is accomplished by instructing
 // GCC to include this function in the __init_array. The 102 argument
@@ -51,7 +53,9 @@ __attribute__((constructor(102))) static void pros_init(void) {
 	// https://github.com/purduesigbots/pros/pull/144/#issuecomment-496901942
 	system_daemon_initialize();
 
+#ifdef _VEX_V5
 	invoke_install_hot_table();
+#endif
 }
 
 int main() {

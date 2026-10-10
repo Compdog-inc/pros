@@ -82,7 +82,7 @@ extern "C" {
  * the order that the port expects to find them.
  *
  */
-task_stack_t *pxPortInitialiseStack( task_stack_t *pxTopOfStack, task_fn_t pxCode, void *pvParameters ) ;
+StackType_t *pxPortInitialiseStack( StackType_t *pxTopOfStack, task_fn_t pxCode, void *pvParameters ) ;
 
 /* Used by heap_5.c. */
 typedef struct HeapRegion
@@ -118,7 +118,7 @@ size_t xPortGetMinimumEverFreeHeapSize( void ) ;
  * Setup the hardware ready for the scheduler to take control.  This generally
  * sets up a tick interrupt and sets timers for the correct tick frequency.
  */
-int32_t xPortStartScheduler( void ) ;
+BaseType_t xPortStartScheduler( void ) ;
 
 /*
  * Undo any hardware/ISR setup that was performed by xPortStartScheduler() so

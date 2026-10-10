@@ -25,9 +25,10 @@
 #include <stdint.h>
 #include <unistd.h>
 
+#include "kapi.h"
+
 #include "common/gid.h"
 #include "common/string.h"
-#include "kapi.h"
 #include "system/dev/dev.h"
 #include "system/dev/ser.h"
 #include "system/dev/usd.h"
@@ -89,7 +90,7 @@ int vfs_update_entry(int file, struct fs_driver const* const driver, void* arg) 
 	return 0;
 }
 
-int _open(const char* file, int flags, int mode) {
+int _open(const char* file, int flags, ...) {
 	struct _reent* r = _REENT;
 	// Check if the filename is too long or not NULL terminated
 	size_t i = 0;
@@ -102,6 +103,12 @@ int _open(const char* file, int flags, int mode) {
 		r->_errno = ENAMETOOLONG;
 		return -1;
 	}
+
+	va_list args;
+	va_start(args, flags);
+	int mode = va_arg(args, int);
+	va_end(args);
+
 	if (strstr(file, "/ser") == file) {
 		// is a serial pseudofile
 		return ser_open_r(r, file + strlen("/ser"), flags, mode);
@@ -114,7 +121,7 @@ int _open(const char* file, int flags, int mode) {
 	}
 }
 
-ssize_t _write(int file, const void* buf, size_t len) {
+int _write(int file, const void* buf, unsigned int len) {
 	struct _reent* r = _REENT;
 	if (file < 0 || !gid_check(&file_table_gids, file)) {
 		r->_errno = EBADF;
@@ -124,7 +131,7 @@ ssize_t _write(int file, const void* buf, size_t len) {
 	return file_table[file].driver->write_r(r, file_table[file].arg, buf, len);
 }
 
-ssize_t _read(int file, void* buf, size_t len) {
+int _read(int file, void* buf, unsigned int len) {
 	struct _reent* r = _REENT;
 	if (file < 0 || !gid_check(&file_table_gids, file)) {
 		r->_errno = EBADF;
@@ -154,7 +161,7 @@ int _close(int file) {
 	return ret;
 }
 
-int _fstat(int file, struct stat* st) {
+int _fstat(int file, struct _stat64i32* st) {
 	struct _reent* r = _REENT;
 	if (file < 0 || !gid_check(&file_table_gids, file)) {
 		r->_errno = EBADF;

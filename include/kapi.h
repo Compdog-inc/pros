@@ -18,9 +18,10 @@
 
 #pragma once
 
+#include "rtos/FreeRTOS.h"
+
 #include "api.h"
 #include "pros/apix.h"
-#include "rtos/FreeRTOS.h"
 #include "rtos/stream_buffer.h"
 
 #ifdef __cplusplus
@@ -34,11 +35,26 @@ extern "C" {
 
 #define KDBG_FILENO 3
 
+#ifdef _VEX_V5
 #define warn_printf(fmt, ...) dprintf(STDERR_FILENO, "%s:%d -- " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+#else
+#define warn_printf(fmt, ...) fprintf(stderr, "%s:%d -- " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+#endif
 #define warn_wprint(str) wprintf("%s", str)
 
+#ifdef _VEX_V5
 #define kprintf(fmt, ...) dprintf(KDBG_FILENO, "%s:%d -- " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+#else
+#define kprintf(fmt, ...) fprintf(stderr, "%s:%d -- " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+#endif
 #define kprint(str) kprintf("%s", str)
+
+#ifndef _VEX_V5
+#include "common/string.h"
+#define strndup(s, n) kstrndup(s, n)
+#define strdup(s) kstrdup(s)
+#define iprintf(fmt, ...) fprintf(stdout, fmt, ##__VA_ARGS__)
+#endif
 
 #ifndef PROS_RELEASING
 #define kassert(cond)                     \
@@ -51,7 +67,7 @@ extern "C" {
 #define kassert(cond)
 #endif
 
-typedef uint32_t task_stack_t;
+typedef portSTACK_TYPE task_stack_t;
 
 /**
  * Suspends the scheduler without disabling interrupts. context switches will

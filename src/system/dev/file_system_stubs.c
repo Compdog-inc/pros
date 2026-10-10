@@ -22,12 +22,12 @@ int chdir(const char* path) {
 	return -1;
 }
 
-int mkdir(const char* pathname, mode_t mode) {
+int mkdir(const char* pathname) {
 	errno = ENOSYS;
 	return -1;
 }
 
-int chmod(const char* pathname, mode_t mode) {
+int chmod(const char* pathname, int mode) {
 	errno = ENOSYS;
 	return -1;
 }
@@ -47,7 +47,7 @@ long pathconf(const char* path, int name) {
 	return -1;
 }
 
-char* getcwd(char* buf, size_t size) {
+char* getcwd(char* buf, int size) {
 	errno = ENOSYS;
 	return NULL;
 }
@@ -62,7 +62,7 @@ int _link(const char* old, const char* new) {
 	return -1;
 }
 
-int _stat(const char* file, struct stat* st) {
+int _stat(const char* file, struct _stat64i32* st) {
 	errno = ENOSYS;
 	return -1;
 }

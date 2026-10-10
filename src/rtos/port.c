@@ -26,550 +26,608 @@
  */
 
 /* Standard includes. */
-#include <stdlib.h>
+#include <stdio.h>
 
 /* Scheduler includes. */
 #include "FreeRTOS.h"
+
 #include "task.h"
 
-#ifndef configINTERRUPT_CONTROLLER_BASE_ADDRESS
-	#error configINTERRUPT_CONTROLLER_BASE_ADDRESS must be defined.  See http://www.freertos.org/Using-FreeRTOS-on-Cortex-A-Embedded-Processors.html
-#endif
-
-#ifndef configINTERRUPT_CONTROLLER_CPU_INTERFACE_OFFSET
-	#error configINTERRUPT_CONTROLLER_CPU_INTERFACE_OFFSET must be defined.  See http://www.freertos.org/Using-FreeRTOS-on-Cortex-A-Embedded-Processors.html
-#endif
-
-#ifndef configUNIQUE_INTERRUPT_PRIORITIES
-	#error configUNIQUE_INTERRUPT_PRIORITIES must be defined.  See http://www.freertos.org/Using-FreeRTOS-on-Cortex-A-Embedded-Processors.html
-#endif
-
-#ifndef configSETUP_TICK_INTERRUPT
-	#error configSETUP_TICK_INTERRUPT() must be defined.  See http://www.freertos.org/Using-FreeRTOS-on-Cortex-A-Embedded-Processors.html
-#endif /* configSETUP_TICK_INTERRUPT */
-
-#ifndef configMAX_API_CALL_INTERRUPT_PRIORITY
-	#error configMAX_API_CALL_INTERRUPT_PRIORITY must be defined.  See http://www.freertos.org/Using-FreeRTOS-on-Cortex-A-Embedded-Processors.html
-#endif
-
-#if configMAX_API_CALL_INTERRUPT_PRIORITY == 0
-	#error configMAX_API_CALL_INTERRUPT_PRIORITY must not be set to 0
-#endif
-
-#if configMAX_API_CALL_INTERRUPT_PRIORITY > configUNIQUE_INTERRUPT_PRIORITIES
-	#error configMAX_API_CALL_INTERRUPT_PRIORITY must be less than or equal to configUNIQUE_INTERRUPT_PRIORITIES as the lower the numeric priority value the higher the logical interrupt priority
-#endif
-
-#if configUSE_PORT_OPTIMISED_TASK_SELECTION == 1
-	/* Check the configuration. */
-	#if( configMAX_PRIORITIES > 32 )
-		#error configUSE_PORT_OPTIMISED_TASK_SELECTION can only be set to 1 when configMAX_PRIORITIES is less than or equal to 32.  It is very rare that a system requires more than 10 to 15 difference priorities as tasks that share a priority will time slice.
-	#endif
-#endif /* configUSE_PORT_OPTIMISED_TASK_SELECTION */
-
-/* In case security extensions are implemented. */
-#if configMAX_API_CALL_INTERRUPT_PRIORITY <= ( configUNIQUE_INTERRUPT_PRIORITIES / 2 )
-	#error configMAX_API_CALL_INTERRUPT_PRIORITY must be greater than ( configUNIQUE_INTERRUPT_PRIORITIES / 2 )
-#endif
-
-/* Some vendor specific files default configCLEAR_TICK_INTERRUPT() in
-portmacro.h. */
-#ifndef configCLEAR_TICK_INTERRUPT
-	#define configCLEAR_TICK_INTERRUPT()
-#endif
-
-/* A critical section is exited when the critical section nesting count reaches
-this value. */
-#define portNO_CRITICAL_NESTING			( ( uint32_t ) 0 )
-
-/* In all GICs 255 can be written to the priority mask register to unmask all
-(but the lowest) interrupt priority. */
-#define portUNMASK_VALUE				( 0xFFUL )
-
-/* Tasks are not created with a floating point context, but can be given a
-floating point context after they have been created.  A variable is stored as
-part of the tasks context that holds portNO_FLOATING_POINT_CONTEXT if the task
-does not have an FPU context, or any other value if the task does have an FPU
-context. */
-#define portNO_FLOATING_POINT_CONTEXT	( ( task_stack_t ) 0 )
-
-/* Constants required to setup the initial task context. */
-#define portINITIAL_SPSR				( ( task_stack_t ) 0x1f ) /* System mode, ARM mode, IRQ enabled FIQ enabled. */
-#define portTHUMB_MODE_BIT				( ( task_stack_t ) 0x20 )
-#define portINTERRUPT_ENABLE_BIT		( 0x80UL )
-#define portTHUMB_MODE_ADDRESS			( 0x01UL )
-
-/* Used by portASSERT_IF_INTERRUPT_PRIORITY_INVALID() when ensuring the binary
-point is zero. */
-#define portBINARY_POINT_BITS			( ( uint8_t ) 0x03 )
-
-/* Masks all bits in the APSR other than the mode bits. */
-#define portAPSR_MODE_BITS_MASK			( 0x1F )
-
-/* The value of the mode bits in the APSR when the CPU is executing in user
-mode. */
-#define portAPSR_USER_MODE				( 0x10 )
-
-/* The critical section macros only mask interrupts up to an application
-determined priority level.  Sometimes it is necessary to turn interrupt off in
-the CPU itself before modifying certain hardware registers. */
-#define portCPU_IRQ_DISABLE()										\
-	__asm volatile ( "CPSID i" ::: "memory" );						\
-	__asm volatile ( "DSB" );										\
-	__asm volatile ( "ISB" );
-
-#define portCPU_IRQ_ENABLE()										\
-	__asm volatile ( "CPSIE i" ::: "memory" );						\
-	__asm volatile ( "DSB" );										\
-	__asm volatile ( "ISB" );
-
-
-/* Macro to unmask all interrupt priorities. */
-#define portCLEAR_INTERRUPT_MASK()									\
-{																	\
-	portCPU_IRQ_DISABLE();											\
-	portICCPMR_PRIORITY_MASK_REGISTER = portUNMASK_VALUE;			\
-	__asm volatile (	"DSB		\n"								\
-						"ISB		\n" );							\
-	portCPU_IRQ_ENABLE();											\
-}
-
-#define portINTERRUPT_PRIORITY_REGISTER_OFFSET		0x400UL
-#define portMAX_8_BIT_VALUE							( ( uint8_t ) 0xff )
-#define portBIT_0_SET								( ( uint8_t ) 0x01 )
-
-/* Let the user override the pre-loading of the initial LR with the address of
-prvTaskExitError() in case it messes up unwinding of the stack in the
-debugger. */
-#ifdef configTASK_RETURN_ADDRESS
-	#define portTASK_RETURN_ADDRESS	configTASK_RETURN_ADDRESS
+#ifdef __GNUC__
+	#include "mmsystem.h"
 #else
-	#define portTASK_RETURN_ADDRESS	prvTaskExitError
+	#pragma comment(lib, "winmm.lib")
 #endif
 
-/* The space on the stack required to hold the FPU registers.  This is 32 64-bit
-registers, plus a 32-bit status register. */
-#define portFPU_REGISTER_WORDS	( ( 32 * 2 ) + 1 )
+#define portMAX_INTERRUPTS				( ( uint32_t ) sizeof( uint32_t ) * 8UL ) /* The number of bits in an uint32_t. */
+#define portNO_CRITICAL_NESTING 		( ( uint32_t ) 0 )
+
+/* The priorities at which the various components of the simulation execute. */
+#define portDELETE_SELF_THREAD_PRIORITY			 THREAD_PRIORITY_TIME_CRITICAL /* Must be highest. */
+#define portSIMULATED_INTERRUPTS_THREAD_PRIORITY THREAD_PRIORITY_TIME_CRITICAL
+#define portSIMULATED_TIMER_THREAD_PRIORITY		 THREAD_PRIORITY_HIGHEST
+#define portTASK_THREAD_PRIORITY				 THREAD_PRIORITY_ABOVE_NORMAL
+
+/*
+ * Created as a high priority thread, this function uses a timer to simulate
+ * a tick interrupt being generated on an embedded target.  In this Windows
+ * environment the timer does not achieve anything approaching real time
+ * performance though.
+ */
+static DWORD WINAPI prvSimulatedPeripheralTimer( LPVOID lpParameter );
+
+/*
+ * Process all the simulated interrupts - each represented by a bit in
+ * ulPendingInterrupts variable.
+ */
+static void prvProcessSimulatedInterrupts( void );
+
+/*
+ * Interrupt handlers used by the kernel itself.  These are executed from the
+ * simulated interrupt handler thread.
+ */
+static uint32_t prvProcessYieldInterrupt( void );
+static uint32_t prvProcessTickInterrupt( void );
+
+/*
+ * Called when the process exits to let Windows know the high timer resolution
+ * is no longer required.
+ */
+static BOOL WINAPI prvEndProcess( DWORD dwCtrlType );
 
 /*-----------------------------------------------------------*/
 
-/*
- * Starts the first task executing.  This function is necessarily written in
- * assembly code so is implemented in portASM.s.
- */
-extern void vPortRestoreTaskContext( void );
-
-/*
- * Used to catch tasks that attempt to return from their implementing function.
- */
-static void prvTaskExitError( void );
-
-/*
- * If the application provides an implementation of vApplicationIRQHandler(),
- * then it will get called directly without saving the FPU registers on
- * interrupt entry, and this weak implementation of
- * vApplicationFPUSafeIRQHandler() is just provided to remove linkage errors -
- * it should never actually get called so its implementation contains a
- * call to configASSERT() that will always fail.
- *
- * If the application provides its own implementation of
- * vApplicationFPUSafeIRQHandler() then the implementation of
- * vApplicationIRQHandler() provided in portASM.S will save the FPU registers
- * before calling it.
- *
- * Therefore, if the application writer wants FPU registers to be saved on
- * interrupt entry their IRQ handler must be called
- * vApplicationFPUSafeIRQHandler(), and if the application writer does not want
- * FPU registers to be saved on interrupt entry their IRQ handler must be
- * called vApplicationIRQHandler().
- */
-void vApplicationFPUSafeIRQHandler( uint32_t ulICCIAR ) __attribute__((weak) );
-
-/*-----------------------------------------------------------*/
-
-/* A variable is used to keep track of the critical section nesting.  This
-variable has to be stored as part of the task context and must be initialised to
-a non zero value to ensure interrupts don't inadvertently become unmasked before
-the scheduler starts.  As it is stored as part of the task context it will
-automatically be set to 0 when the first task is started. */
-volatile uint32_t ulCriticalNesting = 9999UL;
-
-/* Saved as part of the task context.  If ulPortTaskHasFPUContext is non-zero then
-a floating point context must be saved and restored for the task. */
-volatile uint32_t ulPortTaskHasFPUContext = pdFALSE;
-
-/* Set to 1 to pend a context switch from an ISR. */
-volatile uint32_t ulPortYieldRequired = pdFALSE;
-
-/* Counts the interrupt nesting depth.  A context switch is only performed if
-if the nesting depth is 0. */
-volatile uint32_t ulPortInterruptNesting = 0UL;
-
-/* Used in the asm file. */
-__attribute__(( used )) const uint32_t ulICCIAR = portICCIAR_INTERRUPT_ACKNOWLEDGE_REGISTER_ADDRESS;
-__attribute__(( used )) const uint32_t ulICCEOIR = portICCEOIR_END_OF_INTERRUPT_REGISTER_ADDRESS;
-__attribute__(( used )) const uint32_t ulICCPMR	= portICCPMR_PRIORITY_MASK_REGISTER_ADDRESS;
-__attribute__(( used )) const uint32_t ulMaxAPIPriorityMask = ( configMAX_API_CALL_INTERRUPT_PRIORITY << portPRIORITY_SHIFT );
-
-/*-----------------------------------------------------------*/
-
-void task_clean_up() {
-	// TODO: Make this a kernel debugging statement
-	// vexDisplayString(1, "Reaping dying task: %s", task_get_name(NULL));
-	task_delete(NULL);
-}
-
-/*
- * See header file for description.
- */
-task_stack_t *pxPortInitialiseStack( task_stack_t *pxTopOfStack, task_fn_t pxCode, void *pvParameters )
+/* The WIN32 simulator runs each task in a thread.  The context switching is
+managed by the threads, so the task stack does not have to be managed directly,
+although the task stack is still used to hold an xThreadState structure this is
+the only thing it will ever hold.  The structure indirectly maps the task handle
+to a thread handle. */
+typedef struct
 {
-	/* Setup the initial stack of the task.  The stack is set exactly as
-	expected by the portRESTORE_CONTEXT() macro.
+	/* Handle of the thread that executes the task. */
+	void *pvThread;
 
-	The fist real value on the stack is the status register, which is set for
-	system mode, with interrupts enabled.  A few NULLs are added first to ensure
-	GDB does not try decoding a non-existent return address. */
-	*pxTopOfStack = ( task_stack_t ) NULL;
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) NULL;
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) NULL;
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) portINITIAL_SPSR;
+} xThreadState;
 
-	if( ( ( uint32_t ) pxCode & portTHUMB_MODE_ADDRESS ) != 0x00UL )
+/* Simulated interrupts waiting to be processed.  This is a bit mask where each
+bit represents one interrupt, so a maximum of 32 interrupts can be simulated. */
+static volatile uint32_t ulPendingInterrupts = 0UL;
+
+/* An event used to inform the simulated interrupt processing thread (a high
+priority thread that simulated interrupt processing) that an interrupt is
+pending. */
+static void *pvInterruptEvent = NULL;
+
+/* Mutex used to protect all the simulated interrupt variables that are accessed
+by multiple threads. */
+static void *pvInterruptEventMutex = NULL;
+
+/* The critical nesting count for the currently executing task.  This is
+initialised to a non-zero value so interrupts do not become enabled during
+the initialisation phase.  As each task has its own critical nesting value
+ulCriticalNesting will get set to zero when the first task runs.  This
+initialisation is probably not critical in this simulated environment as the
+simulated interrupt handlers do not get created until the FreeRTOS scheduler is
+started anyway. */
+static uint32_t ulCriticalNesting = 9999UL;
+
+/* Handlers for all the simulated software interrupts.  The first two positions
+are used for the Yield and Tick interrupts so are handled slightly differently,
+all the other interrupts can be user defined. */
+static uint32_t (*ulIsrHandler[ portMAX_INTERRUPTS ])( void ) = { 0 };
+
+/* Pointer to the TCB of the currently executing task. */
+extern void *pxCurrentTCB;
+
+/* Used to ensure nothing is processed during the startup sequence. */
+static BaseType_t xPortRunning = pdFALSE;
+
+/*-----------------------------------------------------------*/
+
+static DWORD WINAPI prvSimulatedPeripheralTimer( LPVOID lpParameter )
+{
+TickType_t xMinimumWindowsBlockTime;
+TIMECAPS xTimeCaps;
+
+	/* Set the timer resolution to the maximum possible. */
+	if( timeGetDevCaps( &xTimeCaps, sizeof( xTimeCaps ) ) == MMSYSERR_NOERROR )
 	{
-		/* The task will start in THUMB mode. */
-		*pxTopOfStack |= portTHUMB_MODE_BIT;
+		xMinimumWindowsBlockTime = ( TickType_t ) xTimeCaps.wPeriodMin;
+		timeBeginPeriod( xTimeCaps.wPeriodMin );
+
+		/* Register an exit handler so the timeBeginPeriod() function can be
+		matched with a timeEndPeriod() when the application exits. */
+		SetConsoleCtrlHandler( prvEndProcess, TRUE );
+	}
+	else
+	{
+		xMinimumWindowsBlockTime = ( TickType_t ) 20;
 	}
 
-	pxTopOfStack--;
+	/* Just to prevent compiler warnings. */
+	( void ) lpParameter;
 
-	/* Next the return address, which in this case is the start of the task. */
-	extern void task_fn_wrapper(task_fn_t fn, void* args);
-	*pxTopOfStack = ( task_stack_t ) task_fn_wrapper;
-	pxTopOfStack--;
-
-	/* Next all the registers other than the stack pointer. */
-	*pxTopOfStack = ( task_stack_t ) task_clean_up;	/* R14 */
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) 0x12121212;	/* R12 */
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) 0x11111111;	/* R11 */
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) 0x10101010;	/* R10 */
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) 0x09090909;	/* R9 */
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) 0x08080808;	/* R8 */
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) 0x07070707;	/* R7 */
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) 0x06060606;	/* R6 */
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) 0x05050505;	/* R5 */
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) 0x04040404;	/* R4 */
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) 0x03030303;	/* R3 */
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) 0x02020202;	/* R2 */
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) pvParameters;	/* R1 */
-	pxTopOfStack--;
-	*pxTopOfStack = ( task_stack_t ) pxCode; /* R0 */
-	pxTopOfStack--;
-
-	/* The task will start with a critical nesting count of 0 as interrupts are
-	enabled. */
-	*pxTopOfStack = portNO_CRITICAL_NESTING;
-
-	#if( configUSE_TASK_FPU_SUPPORT == 1 )
+	for( ;; )
 	{
-		/* The task will start without a floating point context.  A task that
-		uses the floating point hardware must call vPortTaskUsesFPU() before
-		executing any floating point instructions. */
-		pxTopOfStack--;
-		*pxTopOfStack = portNO_FLOATING_POINT_CONTEXT;
-	}
-	#elif( configUSE_TASK_FPU_SUPPORT == 2 )
-	{
-		/* The task will start with a floating point context.  Leave enough
-		space for the registers - and ensure they are initialised to 0. */
-		pxTopOfStack -= portFPU_REGISTER_WORDS;
-		memset( pxTopOfStack, 0x00, portFPU_REGISTER_WORDS * sizeof( task_stack_t ) );
+		/* Wait until the timer expires and we can access the simulated interrupt
+		variables.  *NOTE* this is not a 'real time' way of generating tick
+		events as the next wake time should be relative to the previous wake
+		time, not the time that Sleep() is called.  It is done this way to
+		prevent overruns in this very non real time simulated/emulated
+		environment. */
+		if( portTICK_PERIOD_MS < xMinimumWindowsBlockTime )
+		{
+			Sleep( xMinimumWindowsBlockTime );
+		}
+		else
+		{
+			Sleep( portTICK_PERIOD_MS );
+		}
 
-		pxTopOfStack--;
-		*pxTopOfStack = pdTRUE;
-		ulPortTaskHasFPUContext = pdTRUE;
+		configASSERT( xPortRunning );
+
+		WaitForSingleObject( pvInterruptEventMutex, INFINITE );
+
+		/* The timer has expired, generate the simulated tick event. */
+		ulPendingInterrupts |= ( 1 << portINTERRUPT_TICK );
+
+		/* The interrupt is now pending - notify the simulated interrupt
+		handler thread. */
+		if( ulCriticalNesting == 0 )
+		{
+			SetEvent( pvInterruptEvent );
+		}
+
+		/* Give back the mutex so the simulated interrupt handler unblocks
+		and can	access the interrupt handler variables. */
+		ReleaseMutex( pvInterruptEventMutex );
 	}
-	#else
-	{
-		#error Invalid configUSE_TASK_FPU_SUPPORT setting - configUSE_TASK_FPU_SUPPORT must be set to 1, 2, or left undefined.
-	}
+
+	#ifdef __GNUC__
+		/* Should never reach here - MingW complains if you leave this line out,
+		MSVC complains if you put it in. */
+		return 0;
 	#endif
-
-	return pxTopOfStack;
 }
 /*-----------------------------------------------------------*/
 
-static void prvTaskExitError( void )
+static BOOL WINAPI prvEndProcess( DWORD dwCtrlType )
 {
-	/* A function that implements a task must not exit or attempt to return to
-	its caller as there is nothing to return to.  If a task wants to exit it
-	should instead call task_delete( NULL ).
+TIMECAPS xTimeCaps;
 
-	Artificially force an assert() to be triggered if configASSERT() is
-	defined, then stop here so application writers can catch the error. */
-	configASSERT( ulPortInterruptNesting == ~0UL );
-	portDISABLE_INTERRUPTS();
-	for( ;; );
+	( void ) dwCtrlType;
+
+	if( timeGetDevCaps( &xTimeCaps, sizeof( xTimeCaps ) ) == MMSYSERR_NOERROR )
+	{
+		/* Match the call to timeBeginPeriod( xTimeCaps.wPeriodMin ) made when
+		the process started with a timeEndPeriod() as the process exits. */
+		timeEndPeriod( xTimeCaps.wPeriodMin );
+	}
+
+	return pdFALSE;
 }
 /*-----------------------------------------------------------*/
 
-int32_t xPortStartScheduler( void )
+StackType_t *pxPortInitialiseStack( StackType_t *pxTopOfStack, task_fn_t pxCode, void *pvParameters )
 {
-uint32_t ulAPSR;
+xThreadState *pxThreadState = NULL;
+int8_t *pcTopOfStack = ( int8_t * ) pxTopOfStack;
+const SIZE_T xStackSize = 1024; /* Set the size to a small number which will get rounded up to the minimum possible. */
 
-	#if( configASSERT_DEFINED == 1 )
+	/* In this simulated case a stack is not initialised, but instead a thread
+	is created that will execute the task being created.  The thread handles
+	the context switching itself.  The xThreadState object is placed onto
+	the stack that was created for the task - so the stack buffer is still
+	used, just not in the conventional way.  It will not be used for anything
+	other than holding this structure. */
+	pxThreadState = ( xThreadState * ) ( pcTopOfStack - sizeof( xThreadState ) );
+
+	/* Create the thread itself. */
+	pxThreadState->pvThread = CreateThread( NULL, xStackSize, ( LPTHREAD_START_ROUTINE ) pxCode, pvParameters, CREATE_SUSPENDED | STACK_SIZE_PARAM_IS_A_RESERVATION, NULL );
+	configASSERT( pxThreadState->pvThread ); /* See comment where TerminateThread() is called. */
+	SetThreadAffinityMask( pxThreadState->pvThread, 0x01 );
+	SetThreadPriorityBoost( pxThreadState->pvThread, TRUE );
+	SetThreadPriority( pxThreadState->pvThread, portTASK_THREAD_PRIORITY );
+
+	return ( StackType_t * ) pxThreadState;
+}
+/*-----------------------------------------------------------*/
+
+BaseType_t xPortStartScheduler( void )
+{
+void *pvHandle = NULL;
+int32_t lSuccess;
+xThreadState *pxThreadState = NULL;
+SYSTEM_INFO xSystemInfo;
+
+	xPortWindowsPrintInit();
+
+	/* This port runs windows threads with extremely high priority.  All the
+	threads execute on the same core - to prevent locking up the host only start
+	if the host has multiple cores. */
+	GetSystemInfo( &xSystemInfo );
+	if( xSystemInfo.dwNumberOfProcessors <= 1 )
 	{
-		volatile uint32_t ulOriginalPriority;
-		volatile uint8_t * const pucFirstUserPriorityRegister = ( volatile uint8_t * const ) ( configINTERRUPT_CONTROLLER_BASE_ADDRESS + portINTERRUPT_PRIORITY_REGISTER_OFFSET );
-		volatile uint8_t ucMaxPriorityValue;
+		printf( "This version of the FreeRTOS Windows port can only be used on multi-core hosts.\r\n" );
+		lSuccess = pdFAIL;
+	}
+	else
+	{
+		lSuccess = pdPASS;
 
-		/* Determine how many priority bits are implemented in the GIC.
-
-		Save the interrupt priority value that is about to be clobbered. */
-		ulOriginalPriority = *pucFirstUserPriorityRegister;
-
-		/* Determine the number of priority bits available.  First write to
-		all possible bits. */
-		*pucFirstUserPriorityRegister = portMAX_8_BIT_VALUE;
-
-		/* Read the value back to see how many bits stuck. */
-		ucMaxPriorityValue = *pucFirstUserPriorityRegister;
-
-		/* Shift to the least significant bits. */
-		while( ( ucMaxPriorityValue & portBIT_0_SET ) != portBIT_0_SET )
+		/* The highest priority class is used to [try to] prevent other Windows
+		activity interfering with FreeRTOS timing too much. */
+		if( SetPriorityClass( GetCurrentProcess(), REALTIME_PRIORITY_CLASS ) == 0 )
 		{
-			ucMaxPriorityValue >>= ( uint8_t ) 0x01;
+			printf( "SetPriorityClass() failed\r\n" );
 		}
 
-		/* Sanity check configUNIQUE_INTERRUPT_PRIORITIES matches the read
-		value. */
-		configASSERT( ucMaxPriorityValue == portLOWEST_INTERRUPT_PRIORITY );
+		/* Install the interrupt handlers used by the scheduler itself. */
+		vPortSetInterruptHandler( portINTERRUPT_YIELD, prvProcessYieldInterrupt );
+		vPortSetInterruptHandler( portINTERRUPT_TICK, prvProcessTickInterrupt );
 
-		/* Restore the clobbered interrupt priority register to its original
-		value. */
-		*pucFirstUserPriorityRegister = ulOriginalPriority;
-	}
-	#endif /* conifgASSERT_DEFINED */
+		/* Create the events and mutexes that are used to synchronise all the
+		threads. */
+		pvInterruptEventMutex = CreateMutex( NULL, FALSE, NULL );
+		pvInterruptEvent = CreateEvent( NULL, FALSE, FALSE, NULL );
 
-
-	/* Only continue if the CPU is not in User mode.  The CPU must be in a
-	Privileged mode for the scheduler to start. */
-	__asm volatile ( "MRS %0, APSR" : "=r" ( ulAPSR ) :: "memory" );
-	ulAPSR &= portAPSR_MODE_BITS_MASK;
-	configASSERT( ulAPSR != portAPSR_USER_MODE );
-
-	if( ulAPSR != portAPSR_USER_MODE )
-	{
-		/* Only continue if the binary point value is set to its lowest possible
-		setting.  See the comments in vPortValidateInterruptPriority() below for
-		more information. */
-		configASSERT( ( portICCBPR_BINARY_POINT_REGISTER & portBINARY_POINT_BITS ) <= portMAX_BINARY_POINT_VALUE );
-
-		if( ( portICCBPR_BINARY_POINT_REGISTER & portBINARY_POINT_BITS ) <= portMAX_BINARY_POINT_VALUE )
+		if( ( pvInterruptEventMutex == NULL ) || ( pvInterruptEvent == NULL ) )
 		{
-			/* Interrupts are turned off in the CPU itself to ensure tick does
-			not execute	while the scheduler is being started.  Interrupts are
-			automatically turned back on in the CPU when the first task starts
-			executing. */
-			portCPU_IRQ_DISABLE();
+			lSuccess = pdFAIL;
+		}
 
-			/* Start the timer that generates the tick ISR. */
-			configSETUP_TICK_INTERRUPT();
-
-			/* Start the first task executing. */
-			vPortRestoreTaskContext();
+		/* Set the priority of this thread such that it is above the priority of
+		the threads that run tasks.  This higher priority is required to ensure
+		simulated interrupts take priority over tasks. */
+		pvHandle = GetCurrentThread();
+		if( pvHandle == NULL )
+		{
+			lSuccess = pdFAIL;
 		}
 	}
 
-	/* Will only get here if rtos_sched_start() was called with the CPU in
-	a non-privileged mode or the binary point register was not set to its lowest
-	possible value.  prvTaskExitError() is referenced to prevent a compiler
-	warning about it being defined but not referenced in the case that the user
-	defines their own exit address. */
-	( void ) prvTaskExitError;
+	if( lSuccess == pdPASS )
+	{
+		if( SetThreadPriority( pvHandle, portSIMULATED_INTERRUPTS_THREAD_PRIORITY ) == 0 )
+		{
+			lSuccess = pdFAIL;
+		}
+		SetThreadPriorityBoost( pvHandle, TRUE );
+		SetThreadAffinityMask( pvHandle, 0x01 );
+	}
+
+	if( lSuccess == pdPASS )
+	{
+		/* Start the thread that simulates the timer peripheral to generate
+		tick interrupts.  The priority is set below that of the simulated
+		interrupt handler so the interrupt event mutex is used for the
+		handshake / overrun protection. */
+		pvHandle = CreateThread( NULL, 0, prvSimulatedPeripheralTimer, NULL, CREATE_SUSPENDED, NULL );
+		if( pvHandle != NULL )
+		{
+			SetThreadPriority( pvHandle, portSIMULATED_TIMER_THREAD_PRIORITY );
+			SetThreadPriorityBoost( pvHandle, TRUE );
+			SetThreadAffinityMask( pvHandle, 0x01 );
+			ResumeThread( pvHandle );
+		}
+
+		/* Start the highest priority task by obtaining its associated thread
+		state structure, in which is stored the thread handle. */
+		pxThreadState = ( xThreadState * ) *( ( size_t * ) pxCurrentTCB );
+		ulCriticalNesting = portNO_CRITICAL_NESTING;
+
+		/* Bump up the priority of the thread that is going to run, in the
+		hope that this will assist in getting the Windows thread scheduler to
+		behave as an embedded engineer might expect. */
+		ResumeThread( pxThreadState->pvThread );
+
+		/* Handle all simulated interrupts - including yield requests and
+		simulated ticks. */
+		prvProcessSimulatedInterrupts();
+	}
+
+	/* Would not expect to return from prvProcessSimulatedInterrupts(), so should
+	not get here. */
 	return 0;
+}
+/*-----------------------------------------------------------*/
+
+static uint32_t prvProcessYieldInterrupt( void )
+{
+	return pdTRUE;
+}
+/*-----------------------------------------------------------*/
+
+static uint32_t prvProcessTickInterrupt( void )
+{
+uint32_t ulSwitchRequired;
+
+	/* Process the tick itself. */
+	configASSERT( xPortRunning );
+	ulSwitchRequired = ( uint32_t ) xTaskIncrementTick();
+
+	return ulSwitchRequired;
+}
+/*-----------------------------------------------------------*/
+
+static void prvProcessSimulatedInterrupts( void )
+{
+uint32_t ulSwitchRequired, i;
+xThreadState *pxThreadState;
+void *pvObjectList[ 2 ];
+CONTEXT xContext;
+
+	/* Going to block on the mutex that ensured exclusive access to the simulated
+	interrupt objects, and the event that signals that a simulated interrupt
+	should be processed. */
+	pvObjectList[ 0 ] = pvInterruptEventMutex;
+	pvObjectList[ 1 ] = pvInterruptEvent;
+
+	/* Create a pending tick to ensure the first task is started as soon as
+	this thread pends. */
+	ulPendingInterrupts |= ( 1 << portINTERRUPT_TICK );
+	SetEvent( pvInterruptEvent );
+
+	xPortRunning = pdTRUE;
+
+	for(;;)
+	{
+		WaitForMultipleObjects( sizeof( pvObjectList ) / sizeof( void * ), pvObjectList, TRUE, INFINITE );
+
+		/* Used to indicate whether the simulated interrupt processing has
+		necessitated a context switch to another task/thread. */
+		ulSwitchRequired = pdFALSE;
+
+		/* For each interrupt we are interested in processing, each of which is
+		represented by a bit in the 32bit ulPendingInterrupts variable. */
+		for( i = 0; i < portMAX_INTERRUPTS; i++ )
+		{
+			/* Is the simulated interrupt pending? */
+			if( ulPendingInterrupts & ( 1UL << i ) )
+			{
+				/* Is a handler installed? */
+				if( ulIsrHandler[ i ] != NULL )
+				{
+					/* Run the actual handler. */
+					if( ulIsrHandler[ i ]() != pdFALSE )
+					{
+						ulSwitchRequired |= ( 1 << i );
+					}
+				}
+
+				/* Clear the interrupt pending bit. */
+				ulPendingInterrupts &= ~( 1UL << i );
+			}
+		}
+
+		if( ulSwitchRequired != pdFALSE )
+		{
+			void *pvOldCurrentTCB;
+
+			pvOldCurrentTCB = pxCurrentTCB;
+
+			/* Select the next task to run. */
+			vTaskSwitchContext();
+
+			/* If the task selected to enter the running state is not the task
+			that is already in the running state. */
+			if( pvOldCurrentTCB != pxCurrentTCB )
+			{
+				/* Suspend the old thread. */
+				pxThreadState = ( xThreadState *) *( ( size_t * ) pvOldCurrentTCB );
+				SuspendThread( pxThreadState->pvThread );
+
+				/* Ensure the thread is actually suspended by performing a
+				synchronous operation that can only complete when the thread is
+				actually suspended.  The below code asks for dummy register
+				data. */
+				xContext.ContextFlags = CONTEXT_INTEGER;
+				( void ) GetThreadContext( pxThreadState->pvThread, &xContext );
+
+				/* Obtain the state of the task now selected to enter the
+				Running state. */
+				pxThreadState = ( xThreadState * ) ( *( size_t *) pxCurrentTCB );
+				ResumeThread( pxThreadState->pvThread );
+			}
+		}
+
+		ReleaseMutex( pvInterruptEventMutex );
+	}
+}
+/*-----------------------------------------------------------*/
+
+void vPortDeleteThread( void *pvTaskToDelete )
+{
+xThreadState *pxThreadState;
+uint32_t ulErrorCode;
+
+	/* Remove compiler warnings if configASSERT() is not defined. */
+	( void ) ulErrorCode;
+
+	/* Find the handle of the thread being deleted. */
+	pxThreadState = ( xThreadState * ) ( *( size_t *) pvTaskToDelete );
+
+	/* Check that the thread is still valid, it might have been closed by
+	vPortCloseRunningThread() - which will be the case if the task associated
+	with the thread originally deleted itself rather than being deleted by a
+	different task. */
+	if( pxThreadState->pvThread != NULL )
+	{
+		WaitForSingleObject( pvInterruptEventMutex, INFINITE );
+
+		/* !!! This is not a nice way to terminate a thread, and will eventually
+		result in resources being depleted if tasks frequently delete other
+		tasks (rather than deleting themselves) as the task stacks will not be
+		freed. */
+		ulErrorCode = TerminateThread( pxThreadState->pvThread, 0 );
+		configASSERT( ulErrorCode );
+
+		ulErrorCode = CloseHandle( pxThreadState->pvThread );
+		configASSERT( ulErrorCode );
+
+		ReleaseMutex( pvInterruptEventMutex );
+	}
+}
+/*-----------------------------------------------------------*/
+
+void vPortCloseRunningThread( void *pvTaskToDelete, volatile BaseType_t *pxPendYield )
+{
+xThreadState *pxThreadState;
+void *pvThread;
+uint32_t ulErrorCode;
+
+	/* Remove compiler warnings if configASSERT() is not defined. */
+	( void ) ulErrorCode;
+
+	/* Find the handle of the thread being deleted. */
+	pxThreadState = ( xThreadState * ) ( *( size_t *) pvTaskToDelete );
+	pvThread = pxThreadState->pvThread;
+
+	/* Raise the Windows priority of the thread to ensure the FreeRTOS scheduler
+	does not run and swap it out before it is closed.  If that were to happen
+	the thread would never run again and effectively be a thread handle and
+	memory leak. */
+	SetThreadPriority( pvThread, portDELETE_SELF_THREAD_PRIORITY );
+
+	/* This function will not return, therefore a yield is set as pending to
+	ensure a context switch occurs away from this thread on the next tick. */
+	*pxPendYield = pdTRUE;
+
+	/* Mark the thread associated with this task as invalid so
+	vPortDeleteThread() does not try to terminate it. */
+	pxThreadState->pvThread = NULL;
+
+	/* Close the thread. */
+	ulErrorCode = CloseHandle( pvThread );
+	configASSERT( ulErrorCode );
+
+	/* This is called from a critical section, which must be exited before the
+	thread stops. */
+	taskEXIT_CRITICAL();
+
+	ExitThread( 0 );
 }
 /*-----------------------------------------------------------*/
 
 void vPortEndScheduler( void )
 {
-	/* Not implemented in ports where there is nothing to return to.
-	Artificially force an assert. */
-	configASSERT( ulCriticalNesting == 1000UL );
+	/* This function IS NOT TESTED! */
+	TerminateProcess( GetCurrentProcess(), 0 );
+}
+/*-----------------------------------------------------------*/
+
+void vPortGenerateSimulatedInterrupt( uint32_t ulInterruptNumber )
+{
+	configASSERT( xPortRunning );
+
+	if( ( ulInterruptNumber < portMAX_INTERRUPTS ) && ( pvInterruptEventMutex != NULL ) )
+	{
+		/* Yield interrupts are processed even when critical nesting is
+		non-zero. */
+		WaitForSingleObject( pvInterruptEventMutex, INFINITE );
+		ulPendingInterrupts |= ( 1 << ulInterruptNumber );
+
+		/* The simulated interrupt is now held pending, but don't actually
+		process it yet if this call is within a critical section.  It is
+		possible for this to be in a critical section as calls to wait for
+		mutexes are accumulative. */
+		if( ulCriticalNesting == 0 )
+		{
+			SetEvent( pvInterruptEvent );
+		}
+
+		ReleaseMutex( pvInterruptEventMutex );
+	}
+}
+/*-----------------------------------------------------------*/
+
+void vPortSetInterruptHandler( uint32_t ulInterruptNumber, uint32_t (*pvHandler)( void ) )
+{
+	if( ulInterruptNumber < portMAX_INTERRUPTS )
+	{
+		if( pvInterruptEventMutex != NULL )
+		{
+			WaitForSingleObject( pvInterruptEventMutex, INFINITE );
+			ulIsrHandler[ ulInterruptNumber ] = pvHandler;
+			ReleaseMutex( pvInterruptEventMutex );
+		}
+		else
+		{
+			ulIsrHandler[ ulInterruptNumber ] = pvHandler;
+		}
+	}
 }
 /*-----------------------------------------------------------*/
 
 void vPortEnterCritical( void )
 {
-	/* Mask interrupts up to the max syscall interrupt priority. */
-	ulPortSetInterruptMask();
-
-	/* Now interrupts are disabled ulCriticalNesting can be accessed
-	directly.  Increment ulCriticalNesting to keep a count of how many times
-	portENTER_CRITICAL() has been called. */
-	ulCriticalNesting++;
-
-	/* This is not the interrupt safe version of the enter critical function so
-	assert() if it is being called from an interrupt context.  Only API
-	functions that end in "FromISR" can be used in an interrupt.  Only assert if
-	the critical nesting count is 1 to protect against recursive calls if the
-	assert function also uses a critical section. */
-	if( ulCriticalNesting == 1 )
+	if( xPortRunning == pdTRUE )
 	{
-		configASSERT( ulPortInterruptNesting == 0 );
+		/* The interrupt event mutex is held for the entire critical section,
+		effectively disabling (simulated) interrupts. */
+		WaitForSingleObject( pvInterruptEventMutex, INFINITE );
+		ulCriticalNesting++;
+	}
+	else
+	{
+		ulCriticalNesting++;
 	}
 }
 /*-----------------------------------------------------------*/
 
 void vPortExitCritical( void )
 {
+int32_t lMutexNeedsReleasing;
+
+	/* The interrupt event mutex should already be held by this thread as it was
+	obtained on entry to the critical section. */
+
+	lMutexNeedsReleasing = pdTRUE;
+
 	if( ulCriticalNesting > portNO_CRITICAL_NESTING )
 	{
-		/* Decrement the nesting count as the critical section is being
-		exited. */
-		ulCriticalNesting--;
-
-		/* If the nesting level has reached zero then all interrupt
-		priorities must be re-enabled. */
-		if( ulCriticalNesting == portNO_CRITICAL_NESTING )
+		if( ulCriticalNesting == ( portNO_CRITICAL_NESTING + 1 ) )
 		{
-			/* Critical nesting has reached zero so all interrupt priorities
-			should be unmasked. */
-			portCLEAR_INTERRUPT_MASK();
+			ulCriticalNesting--;
+
+			/* Were any interrupts set to pending while interrupts were
+			(simulated) disabled? */
+			if( ulPendingInterrupts != 0UL )
+			{
+				configASSERT( xPortRunning );
+				SetEvent( pvInterruptEvent );
+
+				/* Mutex will be released now, so does not require releasing
+				on function exit. */
+				lMutexNeedsReleasing = pdFALSE;
+				ReleaseMutex( pvInterruptEventMutex );
+			}
+		}
+		else
+		{
+			/* Tick interrupts will still not be processed as the critical
+			nesting depth will not be zero. */
+			ulCriticalNesting--;
+		}
+	}
+
+	if( pvInterruptEventMutex != NULL )
+	{
+		if( lMutexNeedsReleasing == pdTRUE )
+		{
+			configASSERT( xPortRunning );
+			ReleaseMutex( pvInterruptEventMutex );
 		}
 	}
 }
 /*-----------------------------------------------------------*/
 
-void FreeRTOS_Tick_Handler( void )
+void __sinit(struct _reent * s)
 {
-	/* Set interrupt mask before altering scheduler structures.   The tick
-	handler runs at the lowest priority, so interrupts cannot already be masked,
-	so there is no need to save and restore the current mask value.  It is
-	necessary to turn off interrupts in the CPU itself while the ICCPMR is being
-	updated. */
-	portCPU_IRQ_DISABLE();
-	portICCPMR_PRIORITY_MASK_REGISTER = ( uint32_t ) ( configMAX_API_CALL_INTERRUPT_PRIORITY << portPRIORITY_SHIFT );
-	__asm volatile (	"dsb		\n"
-						"isb		\n" ::: "memory" );
-	portCPU_IRQ_ENABLE();
-
-	/* Increment the RTOS tick. */
-	if( xTaskIncrementTick() != pdFALSE )
-	{
-		ulPortYieldRequired = pdTRUE;
-	}
-
-	/* Ensure all interrupt priorities are active again. */
-	portCLEAR_INTERRUPT_MASK();
-	configCLEAR_TICK_INTERRUPT();
-}
-/*-----------------------------------------------------------*/
-
-#if( configUSE_TASK_FPU_SUPPORT != 2 )
-
-	void vPortTaskUsesFPU( void )
-	{
-	uint32_t ulInitialFPSCR = 0;
-
-		/* A task is registering the fact that it needs an FPU context.  Set the
-		FPU flag (which is saved as part of the task context). */
-		ulPortTaskHasFPUContext = pdTRUE;
-
-		/* Initialise the floating point status register. */
-		__asm volatile ( "FMXR 	FPSCR, %0" :: "r" (ulInitialFPSCR) : "memory" );
-	}
-
-#endif /* configUSE_TASK_FPU_SUPPORT */
-/*-----------------------------------------------------------*/
-
-void vPortClearInterruptMask( uint32_t ulNewMaskValue )
-{
-	if( ulNewMaskValue == pdFALSE )
-	{
-		portCLEAR_INTERRUPT_MASK();
-	}
-}
-/*-----------------------------------------------------------*/
-
-uint32_t ulPortSetInterruptMask( void )
-{
-uint32_t ulReturn;
-
-	/* Interrupt in the CPU must be turned off while the ICCPMR is being
-	updated. */
-	portCPU_IRQ_DISABLE();
-	if( portICCPMR_PRIORITY_MASK_REGISTER == ( uint32_t ) ( configMAX_API_CALL_INTERRUPT_PRIORITY << portPRIORITY_SHIFT ) )
-	{
-		/* Interrupts were already masked. */
-		ulReturn = pdTRUE;
-	}
-	else
-	{
-		ulReturn = pdFALSE;
-		portICCPMR_PRIORITY_MASK_REGISTER = ( uint32_t ) ( configMAX_API_CALL_INTERRUPT_PRIORITY << portPRIORITY_SHIFT );
-		__asm volatile (	"dsb		\n"
-							"isb		\n" ::: "memory" );
-	}
-	portCPU_IRQ_ENABLE();
-
-	return ulReturn;
-}
-/*-----------------------------------------------------------*/
-
-#if( configASSERT_DEFINED == 1 )
-
-	void vPortValidateInterruptPriority( void )
-	{
-		/* The following assertion will fail if a service routine (ISR) for
-		an interrupt that has been assigned a priority above
-		configMAX_SYSCALL_INTERRUPT_PRIORITY calls an ISR safe FreeRTOS API
-		function.  ISR safe FreeRTOS API functions must *only* be called
-		from interrupts that have been assigned a priority at or below
-		configMAX_SYSCALL_INTERRUPT_PRIORITY.
-
-		Numerically low interrupt priority numbers represent logically high
-		interrupt priorities, therefore the priority of the interrupt must
-		be set to a value equal to or numerically *higher* than
-		configMAX_SYSCALL_INTERRUPT_PRIORITY.
-
-		FreeRTOS maintains separate thread and ISR API functions to ensure
-		interrupt entry is as fast and simple as possible. */
-		configASSERT( portICCRPR_RUNNING_PRIORITY_REGISTER >= ( uint32_t ) ( configMAX_API_CALL_INTERRUPT_PRIORITY << portPRIORITY_SHIFT ) );
-
-		/* Priority grouping:  The interrupt controller (GIC) allows the bits
-		that define each interrupt's priority to be split between bits that
-		define the interrupt's pre-emption priority bits and bits that define
-		the interrupt's sub-priority.  For simplicity all bits must be defined
-		to be pre-emption priority bits.  The following assertion will fail if
-		this is not the case (if some bits represent a sub-priority).
-
-		The priority grouping is configured by the GIC's binary point register
-		(ICCBPR).  Writing 0 to ICCBPR will ensure it is set to its lowest
-		possible value (which may be above 0). */
-		configASSERT( ( portICCBPR_BINARY_POINT_REGISTER & portBINARY_POINT_BITS ) <= portMAX_BINARY_POINT_VALUE );
-	}
-
-#endif /* configASSERT_DEFINED */
-/*-----------------------------------------------------------*/
-
-void vApplicationFPUSafeIRQHandler( uint32_t ulICCIAR )
-{
-	( void ) ulICCIAR;
-	configASSERT( ( volatile void * ) NULL );
+	s->__cleanup = NULL;
+	s->_stdin = stdin;
+	s->_stdout = stdout;
+	s->_stderr = stderr;
+	s->_putchar = putchar;
+	s->_getchar = getchar;
 }

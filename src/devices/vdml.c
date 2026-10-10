@@ -13,8 +13,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
-#include "vdml/vdml.h"
 #include "kapi.h"
+#include "vdml/vdml.h"
 #include "v5_api.h"
 #include "vdml/registry.h"
 

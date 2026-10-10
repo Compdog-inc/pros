@@ -138,7 +138,7 @@
 #define configUSE_COUNTING_SEMAPHORES           1
 #define configUSE_QUEUE_SETS                    0
 #define configSUPPORT_STATIC_ALLOCATION         1
-#define configUSE_NEWLIB_REENTRANT              1
+#define configUSE_NEWLIB_REENTRANT              0
 #define configSTACK_DEPTH_TYPE                  size_t
 
 #define configNUM_THREAD_LOCAL_STORAGE_POINTERS 2
@@ -208,6 +208,7 @@ some problems when it tries to unwind the stack, as the exit error function has
 nothing to return to.  To avoid this define configTASK_RETURN_ADDRESS to 0.  */
 #define configTASK_RETURN_ADDRESS   NULL
 
+#ifdef _VEX_V5
 
 /****** Hardware specific settings. *******************************************/
 
@@ -230,5 +231,7 @@ Zynq MPU. */
 #define configINTERRUPT_CONTROLLER_BASE_ADDRESS         ( 0xF8F01000 )
 #define configINTERRUPT_CONTROLLER_CPU_INTERFACE_OFFSET ( -0xf00 )
 #define configUNIQUE_INTERRUPT_PRIORITIES               32
+
+#endif
 
 #endif /* FREERTOS_CONFIG_H */

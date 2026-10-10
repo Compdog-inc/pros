@@ -46,7 +46,7 @@ TEMPLATE_FILES+= $(ROOT)/template-gitignore
 
 PATCHED_SDK=$(FWDIR)/libv5rts/sdk/vexv5/libv5rts.patched.a
 
-EXTRA_LIB_DEPS=$(INCDIR)/api.h $(PATCHED_SDK)
+EXTRA_LIB_DEPS=$(INCDIR)/api.h # $(PATCHED_SDK)
 
 ################################################################################
 ################################################################################
@@ -90,12 +90,12 @@ template:: patch_sdk_headers clean-template library
 	@echo "Creating template"
 	$Dpros c create-template $(TEMPLATE_DIR) kernel $(shell cat $(ROOT)/version) $(CREATE_TEMPLATE_ARGS)
 
-LIBV5RTS_EXTRACTION_DIR=$(BINDIR)/libv5rts
-$(LIBAR): patch_sdk_headers $(call GETALLOBJ,$(EXCLUDE_SRC_FROM_LIB)) $(EXTRA_LIB_DEPS)
-	$(VV)mkdir -p $(LIBV5RTS_EXTRACTION_DIR)
-	$(call test_output_2,Extracting libv5rts ,cd $(LIBV5RTS_EXTRACTION_DIR) && $(AR) x ../../$(PATCHED_SDK),$(DONE_STRING))
-	$(eval LIBV5RTS_OBJECTS := $(shell $(AR) t $(PATCHED_SDK)))
-	-$Drm -f $@
-	$(call test_output_2,Creating $@ ,$(AR) rcs $@ $(addprefix $(LIBV5RTS_EXTRACTION_DIR)/, $(LIBV5RTS_OBJECTS)) $(call GETALLOBJ,$(EXCLUDE_SRC_FROM_LIB)),$(DONE_STRING))
+# LIBV5RTS_EXTRACTION_DIR=$(BINDIR)/libv5rts
+# $(LIBAR): patch_sdk_headers $(call GETALLOBJ,$(EXCLUDE_SRC_FROM_LIB)) $(EXTRA_LIB_DEPS)
+# 	$(VV)mkdir -p $(LIBV5RTS_EXTRACTION_DIR)
+# 	$(call test_output_2,Extracting libv5rts ,cd $(LIBV5RTS_EXTRACTION_DIR) && $(AR) x ../../$(PATCHED_SDK),$(DONE_STRING))
+# 	$(eval LIBV5RTS_OBJECTS := $(shell $(AR) t $(PATCHED_SDK)))
+# 	-$Drm -f $@
+# 	$(call test_output_2,Creating $@ ,$(AR) rcs $@ $(addprefix $(LIBV5RTS_EXTRACTION_DIR)/, $(LIBV5RTS_OBJECTS)) $(call GETALLOBJ,$(EXCLUDE_SRC_FROM_LIB)),$(DONE_STRING))
 # @echo -n "Stripping non-public symbols "
 # $(call test_output,$D$(OBJCOPY) -S -D -g --strip-unneeded --keep-symbols public_symbols.txt $@,$(DONE_STRING))

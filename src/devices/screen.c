@@ -16,7 +16,11 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#ifdef _VEX_V5
 #include <sys/_stdint.h>
+#else
+#include <stdint.h>
+#endif
 
 #include "common/linkedlist.h"
 #include "kapi.h"

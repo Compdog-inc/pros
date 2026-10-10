@@ -39,7 +39,7 @@ typedef struct dev_file_arg {
 /******************************************************************************/
 /**                         newlib driver functions                          **/
 /******************************************************************************/
-int dev_read_r(struct _reent* r, void* const arg, uint8_t* buffer, const size_t len) {
+ssize_t dev_read_r(struct _reent* r, void* const arg, uint8_t* buffer, const size_t len) {
 	dev_file_arg_t* file_arg = (dev_file_arg_t*)arg;
 	uint32_t port = file_arg->port;
 	int32_t recv = 0;
@@ -86,7 +86,7 @@ int dev_close_r(struct _reent* r, void* const arg) {
 	return 0;
 }
 
-int dev_fstat_r(struct _reent* r, void* const arg, struct stat* st) {
+int dev_fstat_r(struct _reent* r, void* const arg, struct _stat64i32* st) {
 	// this is a complete implementation
 	st->st_mode = S_IFCHR;
 	return 0;

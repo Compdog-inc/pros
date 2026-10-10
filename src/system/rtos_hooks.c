@@ -29,10 +29,12 @@ void FIQInterrupt() {
 // Replacement for DataAbortInterrupt
 void DataAbortInterrupt() {
 	taskDISABLE_INTERRUPTS();
+#ifdef _VEX_V5
 	register int sp;
 	asm("add %0,sp,#8\n" : "=r"(sp));
 	extern void report_fatal_error(uint32_t _sp, const char* error_name);
 	report_fatal_error(sp, "DATA ABORT EXCEPTION");
+#endif
 	for(uint8_t i = 1; i <= 21; i++) {
 		motor_move_voltage(i, 0);
 	}
@@ -45,10 +47,12 @@ void DataAbortInterrupt() {
 // Replacement for PrefetchAbortInterrupt
 void PrefetchAbortInterrupt() {
 	taskDISABLE_INTERRUPTS();
+#ifdef _VEX_V5
 	register int sp;
 	asm("add %0,sp,#8\n" : "=r"(sp));
 	extern void report_fatal_error(uint32_t _sp, const char* error_name);
 	report_fatal_error(sp, "PREFETCH ABORT EXCEPTION");
+#endif
 	for(uint8_t i = 1; i <= 21; i++) {
 		motor_move_voltage(i, 0);
 	}
@@ -63,18 +67,32 @@ void _boot() {
 	vexSystemBoot();
 }
 
+#ifdef _VEX_V5
 extern void vPortInstallFreeRTOSVectorTable(void);
+#endif
+
+struct _reent* _GLOBAL_REENT = NULL;
+struct _reent* _REENT = NULL;
+
+extern void __sinit(struct _reent * s);
+
 void rtos_initialize() {
+	_GLOBAL_REENT = _REENT = malloc(sizeof(struct _reent));
+	ZeroMemory(_GLOBAL_REENT, sizeof(struct _reent));
+	__sinit(_GLOBAL_REENT);
 	vexSystemTimerStop();
 
 	portDISABLE_INTERRUPTS();
 
+#ifdef _VEX_V5
 	vPortInstallFreeRTOSVectorTable();
+#endif
 
 	void task_notify_when_deleting_init();
 	task_notify_when_deleting_init();
 }
 
+#ifdef _VEX_V5
 extern void FreeRTOS_Tick_Handler(void);
 void rtos_tick_interrupt_config() {
 	vexSystemTimerReinitForRtos(portLOWEST_USABLE_INTERRUPT_PRIORITY << portPRIORITY_SHIFT,
@@ -84,6 +102,7 @@ void rtos_tick_interrupt_config() {
 void rtos_tick_interrupt_clear() {
 	vexSystemTimerClearInterrupt();
 }
+#endif
 
 void vApplicationFPUSafeIRQHandler(uint32_t ulICCIAR) {
 	vexSystemApplicationIRQHandler(ulICCIAR);
@@ -160,13 +179,13 @@ void vAssertCalled(const char* pcFile, unsigned long ulLine) {
 // configSUPPORT_STATIC_ALLOCATION is set to 1, so the application must provide
 // an implementation of vApplicationGetIdleTaskMemory() to provide the memory
 // that is used by the Idle task.
-void vApplicationGetIdleTaskMemory(static_task_s_t** ppxIdleTaskTCBBuffer, task_stack_t** ppxIdleTaskStackBuffer,
+void vApplicationGetIdleTaskMemory(static_task_s_t** ppxIdleTaskTCBBuffer, StackType_t** ppxIdleTaskStackBuffer,
                                    uint32_t* pulIdleTaskStackSize) {
 	// If the buffers to be provided to the Idle task are declared inside this
 	// function then they must be declared static - otherwise they will be
 	// allocated on the stack and so not exists after this function exits.
 	static static_task_s_t xIdleTaskTCB;
-	static task_stack_t uxIdleTaskStack[configMINIMAL_STACK_SIZE];
+	static StackType_t uxIdleTaskStack[configMINIMAL_STACK_SIZE];
 
 	// Pass out a pointer to the static_task_s_t structure in which the Idle
 	// task's state will be stored.
@@ -185,13 +204,13 @@ void vApplicationGetIdleTaskMemory(static_task_s_t** ppxIdleTaskTCBBuffer, task_
 // the application must provide an implementation of
 // vApplicationGetTimerTaskMemory() to provide the memory that is used by the
 // Timer service task.
-void vApplicationGetTimerTaskMemory(static_task_s_t** ppxTimerTaskTCBBuffer, task_stack_t** ppxTimerTaskStackBuffer,
+void vApplicationGetTimerTaskMemory(static_task_s_t** ppxTimerTaskTCBBuffer, StackType_t** ppxTimerTaskStackBuffer,
                                     uint32_t* pulTimerTaskStackSize) {
 	// If the buffers to be provided to the Timer task are declared inside this
 	// function then they must be declared static - otherwise they will be
 	// allocated on the stack and so not exists after this function exits.
 	static static_task_s_t xTimerTaskTCB;
-	static task_stack_t uxTimerTaskStack[configTIMER_TASK_STACK_DEPTH];
+	static StackType_t uxTimerTaskStack[configTIMER_TASK_STACK_DEPTH];
 
 	// Pass out a pointer to the static_task_s_t structure in which the Timer
 	// task's state will be stored.

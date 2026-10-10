@@ -297,7 +297,7 @@ static volatile uint32_t xTickCount 				= ( uint32_t ) configINITIAL_TICK_COUNT;
 static volatile uint32_t uxTopReadyPriority 		= tskIDLE_PRIORITY;
 static volatile int32_t xSchedulerRunning 		= pdFALSE;
 static volatile uint32_t uxPendedTicks 			= ( uint32_t ) 0U;
-static volatile int32_t xYieldPending 			= pdFALSE;
+static volatile BaseType_t xYieldPending 			= pdFALSE;
 static volatile int32_t xNumOfOverflows 			= ( int32_t ) 0;
 static uint32_t uxTaskNumber 					= ( uint32_t ) 0U;
 static volatile uint32_t xNextTaskUnblockTime		= ( uint32_t ) 0U; /* Initialised to portMAX_DELAY before the scheduler starts. */
@@ -339,7 +339,7 @@ static volatile uint32_t uxSchedulerSuspended	= ( uint32_t ) pdFALSE;
 
 #if( configSUPPORT_STATIC_ALLOCATION == 1 )
 
-	extern void vApplicationGetIdleTaskMemory( static_task_s_t **ppxIdleTaskTCBBuffer, task_stack_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize );
+	extern void vApplicationGetIdleTaskMemory( static_task_s_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize );
 
 #endif
 
@@ -504,7 +504,7 @@ static void prvAddNewTaskToReadyList( TCB_t *pxNewTCB ) ;
 	task_t task_create_static(	task_fn_t task_code, void* const param,
 								uint32_t priority, const size_t stack_size,
 								const char* const name,
-								task_stack_t * const stack_buffer,
+								StackType_t * const stack_buffer,
 								static_task_s_t * const task_buffer ) /*lint !e971 Unqualified char types are allowed for strings and single characters only. */
 	{
 	TCB_t *pxNewTCB;
@@ -535,7 +535,7 @@ static void prvAddNewTaskToReadyList( TCB_t *pxNewTCB ) ;
 			/* The memory used for the task's TCB and stack are passed into this
 			function - use them. */
 			pxNewTCB = (TCB_t*)task_buffer; /*lint !e740 Unusual cast is ok as the structures are designed to have the same alignment, and the size is checked by an assert. */
-			pxNewTCB->pxStack = (task_stack_t*)stack_buffer;
+			pxNewTCB->pxStack = (StackType_t*)stack_buffer;
 
 			#if( tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE != 0 ) /*lint !e731 Macro has been consolidated for readability reasons. */
 			{
@@ -599,10 +599,10 @@ static void prvAddNewTaskToReadyList( TCB_t *pxNewTCB ) ;
 		}
 		#else /* portSTACK_GROWTH */
 		{
-		task_stack_t* stack;
+		StackType_t* stack;
 
 			/* Allocate space for the stack used by the task being created. */
-			stack = ( task_stack_t * ) kmalloc( ( ( ( size_t ) stack_depth ) * sizeof( task_stack_t ) ) ); /*lint !e961 MISRA exception as the casts are only redundant for some ports. */
+			stack = ( StackType_t * ) kmalloc( ( ( ( size_t ) stack_depth ) * sizeof( StackType_t ) ) ); /*lint !e961 MISRA exception as the casts are only redundant for some ports. */
 
 			if( stack != NULL )
 			{
@@ -663,14 +663,14 @@ static void prvInitialiseNewTask( 	task_fn_t pxTaskCode,
 									TCB_t *pxNewTCB
 								)
 {
-task_stack_t *pxTopOfStack;
+	StackType_t *pxTopOfStack;
 uint32_t x;
 
 	/* Avoid dependency on memset() if it is not required. */
 	#if( tskSET_NEW_STACKS_TO_KNOWN_VALUE == 1 )
 	{
 		/* Fill the stack with a known value to assist debugging. */
-		( void ) memset( pxNewTCB->pxStack, ( int ) tskSTACK_FILL_BYTE, ( size_t ) ulStackDepth * sizeof( task_stack_t ) );
+		( void ) memset( pxNewTCB->pxStack, ( int ) tskSTACK_FILL_BYTE, ( size_t ) ulStackDepth * sizeof( StackType_t ) );
 	}
 	#endif /* tskSET_NEW_STACKS_TO_KNOWN_VALUE */
 
@@ -681,7 +681,7 @@ uint32_t x;
 	#if( portSTACK_GROWTH < 0 )
 	{
 		pxTopOfStack = pxNewTCB->pxStack + ( ulStackDepth - ( uint32_t ) 1 );
-		pxTopOfStack = ( task_stack_t * ) ( ( ( portPOINTER_SIZE_TYPE ) pxTopOfStack ) & ( ~( ( portPOINTER_SIZE_TYPE ) portBYTE_ALIGNMENT_MASK ) ) ); /*lint !e923 MISRA exception.  Avoiding casts between pointers and integers is not practical.  Size differences accounted for using portPOINTER_SIZE_TYPE type. */
+		pxTopOfStack = ( StackType_t * ) ( ( ( portPOINTER_SIZE_TYPE ) pxTopOfStack ) & ( ~( ( portPOINTER_SIZE_TYPE ) portBYTE_ALIGNMENT_MASK ) ) ); /*lint !e923 MISRA exception.  Avoiding casts between pointers and integers is not practical.  Size differences accounted for using portPOINTER_SIZE_TYPE type. */
 
 		/* Check the alignment of the calculated top of stack is correct. */
 		configASSERT( ( ( ( portPOINTER_SIZE_TYPE ) pxTopOfStack & ( portPOINTER_SIZE_TYPE ) portBYTE_ALIGNMENT_MASK ) == 0UL ) );
@@ -1744,7 +1744,7 @@ int32_t xReturn;
 	#if( configSUPPORT_STATIC_ALLOCATION == 1 )
 	{
 		static_task_s_t *pxIdleTaskTCBBuffer = NULL;
-		task_stack_t *pxIdleTaskStackBuffer = NULL;
+		StackType_t *pxIdleTaskStackBuffer = NULL;
 		uint32_t ulIdleTaskStackSize;
 
 		/* The Idle task is created using user provided RAM - obtain the
@@ -3461,7 +3461,7 @@ static void prvCheckTasksWaitingTermination( void )
 			ulCount++;
 		}
 
-		ulCount /= ( uint32_t ) sizeof( task_stack_t ); /*lint !e961 Casting is not redundant on smaller architectures. */
+		ulCount /= ( uint32_t ) sizeof( StackType_t ); /*lint !e961 Casting is not redundant on smaller architectures. */
 
 		return ( uint16_t ) ulCount;
 	}

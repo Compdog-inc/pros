@@ -15,8 +15,8 @@
 #include <errno.h>
 #include <stdio.h>
 
-#include "api.h"
 #include "kapi.h"
+#include "api.h"
 #include "pros/misc.h"
 #include "v5_api.h"
 #include "vdml/registry.h"

@@ -193,6 +193,8 @@ static void ser_daemon_task(void* ign) {
 }
 
 void ser_initialize(void) {
+	ser_daemon_task_buffer.pxDummy6 = &ser_daemon_stack;
+
 	inp_buffer_initialize();
 	extern void ser_driver_initialize(void);
 	ser_driver_initialize();

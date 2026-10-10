@@ -114,7 +114,7 @@ bool ser_output_write(const uint8_t* buffer, size_t size, bool noblock) {
 /******************************************************************************/
 /**                         newlib driver functions                          **/
 /******************************************************************************/
-int ser_read_r(struct _reent* r, void* const arg, uint8_t* buffer, const size_t len) {
+ssize_t ser_read_r(struct _reent* r, void* const arg, uint8_t* buffer, const size_t len) {
 	// arg isn't used since serial reads aren't stream-based
 	size_t read = 0;
 	int32_t c;
@@ -200,7 +200,7 @@ int ser_close_r(struct _reent* r, void* const arg) {
 	return 0;
 }
 
-int ser_fstat_r(struct _reent* r, void* const arg, struct stat* st) {
+int ser_fstat_r(struct _reent* r, void* const arg, struct _stat64i32* st) {
 	// this is a complete implementation
 	st->st_mode = S_IFCHR;
 	return 0;

@@ -30,6 +30,8 @@
 #define SEC_TO_MICRO 1000000
 #define MICRO_TO_NANO 1000
 
+#define dprintf(fd, fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
+
 void _exit(int status) {
 	extern void flush_output_streams();
 	flush_output_streams();
@@ -54,7 +56,11 @@ int usleep( useconds_t period ) {
 		return 0;
 	}
 	uint64_t endTime = vexSystemHighResTimeGet() + period;
+	#ifdef _VEX_V5
 	while(vexSystemHighResTimeGet() < endTime) asm("YIELD");
+	#else
+	while(vexSystemHighResTimeGet() < endTime) ;
+	#endif
 	return 0;
 }
 
@@ -86,6 +92,7 @@ static bool user_time_set = false;
 static struct timespec user_time_spec;
 static int64_t set_microseconds = 0;
 
+#ifdef _VEX_V5
 int clock_settime(clockid_t clock_id, const struct timespec *tp) {
 	if(tp == NULL) {
 		errno = EINVAL;
@@ -138,6 +145,7 @@ int clock_gettime(clockid_t clock_id, struct timespec* tp) {
 
 	return retval;
 }
+#endif
 
 // HACK:
 //

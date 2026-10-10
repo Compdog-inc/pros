@@ -13,6 +13,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+ #ifdef _VEX_V5
+
 #include <malloc.h>
 #include <stdio.h>
 #include <unwind.h>
@@ -263,3 +265,5 @@ void backtrace_task(task_t task) {
 	__gnu_Unwind_Backtrace(trace_fn, NULL, &vrs);
 	printf("finished trace\n");
 }
+
+#endif

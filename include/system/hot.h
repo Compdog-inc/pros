@@ -14,4 +14,8 @@ struct hot_table {
 	} functions;
 };
 
+#ifdef _VEX_V5
 extern struct hot_table* const HOT_TABLE;
+#else
+struct hot_table* const HOT_TABLE = NULL;
+#endif

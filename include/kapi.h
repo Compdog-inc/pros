@@ -19,10 +19,11 @@
 #pragma once
 
 #include "rtos/FreeRTOS.h"
+#include "rtos/stream_buffer.h"
 
+// NOLINT: Has to come last
 #include "api.h"
 #include "pros/apix.h"
-#include "rtos/stream_buffer.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,6 +55,8 @@ extern "C" {
 #define strndup(s, n) kstrndup(s, n)
 #define strdup(s) kstrdup(s)
 #define iprintf(fmt, ...) fprintf(stdout, fmt, ##__VA_ARGS__)
+#define malloc(size) kmalloc(size)
+#define free(ptr) kfree(ptr)
 #endif
 
 #ifndef PROS_RELEASING
@@ -174,7 +177,6 @@ sem_t sem_create_static(uint32_t max_count, uint32_t init_count, static_sem_s_t*
  */
 queue_t queue_create_static(uint32_t length, uint32_t item_size, uint8_t* storage_buffer,
                             static_queue_s_t* queue_buffer);
-
 
 /**
  * Display a fatal error to the built-in LCD/touch screen.

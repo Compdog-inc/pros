@@ -70,8 +70,8 @@
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 
-//#include "xparameters.h"
-// fix memset warnings
+// #include "xparameters.h"
+//  fix memset warnings
 #include "string.h"
 
 /*-----------------------------------------------------------
@@ -110,84 +110,86 @@
  * setting configMAX_API_CALL_INTERRUPT_PRIORITY 255 represents the lowest
  * priority.
  */
-#define configMAX_API_CALL_INTERRUPT_PRIORITY   18
+#define configMAX_API_CALL_INTERRUPT_PRIORITY 18
 
-#define configCPU_CLOCK_HZ                      100000000UL
+#define configCPU_CLOCK_HZ 100000000UL
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION 1
-#define configUSE_TICKLESS_IDLE                 0
-#define configTICK_RATE_HZ                      ( ( uint32_t ) 1000 )
-#define configPERIPHERAL_CLOCK_HZ               ( 33333000UL )
-#define configUSE_PREEMPTION                    1
-#define configUSE_IDLE_HOOK                     1
-#define configUSE_TICK_HOOK                     0
-#define configMAX_PRIORITIES                    ( 16 )
-#define configMINIMAL_STACK_SIZE                ( ( unsigned short ) 250 )
+#define configUSE_TICKLESS_IDLE 0
+#define configTICK_RATE_HZ ((uint32_t)1000)
+#define configPERIPHERAL_CLOCK_HZ (33333000UL)
+#define configUSE_PREEMPTION 1
+#define configUSE_IDLE_HOOK 1
+#define configUSE_TICK_HOOK 0
+#define configMAX_PRIORITIES (16)
+#define configMINIMAL_STACK_SIZE ((unsigned short)250)
 // allocate 1 MB for FreeRTOS heap
-#define configTOTAL_HEAP_SIZE                   ( 0x100000 )
-#define configMAX_TASK_NAME_LEN                 ( 32 )
-#define configUSE_TRACE_FACILITY                1
-#define INCLUDE_uxTaskGetStackHighWaterMark     1
-#define configUSE_16_BIT_TICKS                  0
-#define configIDLE_SHOULD_YIELD                 1
-#define configUSE_MUTEXES                       1
-#define configQUEUE_REGISTRY_SIZE               8
-#define configCHECK_FOR_STACK_OVERFLOW          2
-#define configUSE_RECURSIVE_MUTEXES             1
-#define configUSE_MALLOC_FAILED_HOOK            1
-#define configUSE_APPLICATION_TASK_TAG          0
-#define configUSE_COUNTING_SEMAPHORES           1
-#define configUSE_QUEUE_SETS                    0
-#define configSUPPORT_STATIC_ALLOCATION         1
-#define configUSE_NEWLIB_REENTRANT              0
-#define configSTACK_DEPTH_TYPE                  size_t
+#define configTOTAL_HEAP_SIZE (0x100000)
+#define configMAX_TASK_NAME_LEN (32)
+#define configUSE_TRACE_FACILITY 1
+#define INCLUDE_uxTaskGetStackHighWaterMark 1
+#define configUSE_16_BIT_TICKS 0
+#define configIDLE_SHOULD_YIELD 1
+#define configUSE_MUTEXES 1
+#define configQUEUE_REGISTRY_SIZE 8
+#define configCHECK_FOR_STACK_OVERFLOW 2
+#define configUSE_RECURSIVE_MUTEXES 1
+#define configUSE_MALLOC_FAILED_HOOK 1
+#define configUSE_APPLICATION_TASK_TAG 0
+#define configUSE_COUNTING_SEMAPHORES 1
+#define configUSE_QUEUE_SETS 0
+#define configSUPPORT_STATIC_ALLOCATION 1
+#define configUSE_NEWLIB_REENTRANT 0
+#define configSTACK_DEPTH_TYPE size_t
+
+#define configTICK_TYPE_WIDTH_IN_BITS TICK_TYPE_WIDTH_32_BITS
 
 #define configNUM_THREAD_LOCAL_STORAGE_POINTERS 2
 
 /* Include the query-heap CLI command to query the free heap space. */
-#define configINCLUDE_QUERY_HEAP_COMMAND        1
+#define configINCLUDE_QUERY_HEAP_COMMAND 1
 
 /* Software timer definitions. */
-#define configUSE_TIMERS                        1
-#define configTIMER_TASK_PRIORITY               ( configMAX_PRIORITIES - 1 )
-#define configTIMER_QUEUE_LENGTH                5
-#define configTIMER_TASK_STACK_DEPTH            ( configMINIMAL_STACK_SIZE * 2 )
+#define configUSE_TIMERS 1
+#define configTIMER_TASK_PRIORITY (configMAX_PRIORITIES - 1)
+#define configTIMER_QUEUE_LENGTH 5
+#define configTIMER_TASK_STACK_DEPTH (configMINIMAL_STACK_SIZE * 2)
 
 /* If configUSE_TASK_FPU_SUPPORT is set to 1 (or undefined) then each task will
 be created without an FPU context, and a task must call vTaskUsesFPU() before
 making use of any FPU registers.  If configUSE_TASK_FPU_SUPPORT is set to 2 then
 tasks are created with an FPU context by default, and calling vTaskUsesFPU() has
 no effect. */
-#define configUSE_TASK_FPU_SUPPORT              2
+#define configUSE_TASK_FPU_SUPPORT 2
 
 /* Set the following definitions to 1 to include the API function, or zero
 to exclude the API function. */
-#define INCLUDE_vTaskPrioritySet                1
-#define INCLUDE_uxTaskPriorityGet               1
-#define INCLUDE_vTaskDelete                     1
-#define INCLUDE_vTaskCleanUpResources           1
-#define INCLUDE_vTaskSuspend                    1
-#define INCLUDE_vTaskDelayUntil                 1
-#define INCLUDE_vTaskDelay                      1
-#define INCLUDE_xTimerPendFunctionCall          1
-#define INCLUDE_eTaskGetState                   1
-#define INCLUDE_xTaskAbortDelay                 1
-#define INCLUDE_xTaskGetTaskHandle              1
-#define INCLUDE_xTaskGetHandle                  1
-#define INCLUDE_xTaskGetSchedulerState          1
-#define INCLUDE_xQueueGetMutexHolder            1
+#define INCLUDE_vTaskPrioritySet 1
+#define INCLUDE_uxTaskPriorityGet 1
+#define INCLUDE_vTaskDelete 1
+#define INCLUDE_vTaskCleanUpResources 1
+#define INCLUDE_vTaskSuspend 1
+#define INCLUDE_vTaskDelayUntil 1
+#define INCLUDE_vTaskDelay 1
+#define INCLUDE_xTimerPendFunctionCall 1
+#define INCLUDE_eTaskGetState 1
+#define INCLUDE_xTaskAbortDelay 1
+#define INCLUDE_xTaskGetTaskHandle 1
+#define INCLUDE_xTaskGetHandle 1
+#define INCLUDE_xTaskGetSchedulerState 1
+#define INCLUDE_xQueueGetMutexHolder 1
 
 /* This demo makes use of one or more example stats formatting functions.  These
 format the raw data provided by the uxTaskGetSystemState() function in to human
 readable ASCII form.  See the notes in the implementation of vTaskList() within
 FreeRTOS/Source/tasks.c for limitations. */
-#define configUSE_STATS_FORMATTING_FUNCTIONS    1
+#define configUSE_STATS_FORMATTING_FUNCTIONS 1
 
 /* The private watchdog is used to generate run time stats. */
-extern void vInitialiseTimerForRunTimeStats( void );
-extern uint32_t vexSystemWatchdogGet( void );
+extern void vInitialiseTimerForRunTimeStats(void);
+extern uint32_t vexSystemWatchdogGet(void);
 #define configGENERATE_RUN_TIME_STATS 1
 #define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() vInitialiseTimerForRunTimeStats()
-#define portGET_RUN_TIME_COUNTER_VALUE()         vexSystemWatchdogGet()
+#define portGET_RUN_TIME_COUNTER_VALUE() vexSystemWatchdogGet()
 
 /* The size of the global output buffer that is available for use when there
 are multiple command interpreters running at once (for example, one on a UART
@@ -198,15 +200,16 @@ command interpreter running. */
 
 /* Normal assert() semantics without relying on the provision of an assert.h
 header file. */
-void vAssertCalled( const char * pcFile, unsigned long ulLine );
-#define configASSERT( x ) if( ( x ) == 0 ) vAssertCalled( __FILE__, __LINE__ );
+void vAssertCalled(const char* pcFile, unsigned long ulLine);
+#define configASSERT(x) \
+	if ((x) == 0) vAssertCalled(__FILE__, __LINE__);
 
 /* If configTASK_RETURN_ADDRESS is not defined then a task that attempts to
 return from its implementing function will end up in a "task exit error"
 function - which contains a call to configASSERT().  However this can give GCC
 some problems when it tries to unwind the stack, as the exit error function has
 nothing to return to.  To avoid this define configTASK_RETURN_ADDRESS to 0.  */
-#define configTASK_RETURN_ADDRESS   NULL
+#define configTASK_RETURN_ADDRESS NULL
 
 #ifdef _VEX_V5
 
@@ -219,18 +222,18 @@ nothing to return to.  To avoid this define configTASK_RETURN_ADDRESS to 0.  */
  * that is suitable for use on the Zynq MPU.  FreeRTOS_Tick_Handler() must
  * be installed as the peripheral's interrupt handler.
  */
-void rtos_tick_interrupt_config( void );
+void rtos_tick_interrupt_config(void);
 #define configSETUP_TICK_INTERRUPT() rtos_tick_interrupt_config()
 
-void rtos_tick_interrupt_clear( void );
+void rtos_tick_interrupt_clear(void);
 #define configCLEAR_TICK_INTERRUPT() rtos_tick_interrupt_clear()
 
 /* The following constant describe the hardware, and are correct for the
 Zynq MPU. */
-//#define configINTERRUPT_CONTROLLER_BASE_ADDRESS         ( XPAR_PS7_SCUGIC_0_DIST_BASEADDR )
-#define configINTERRUPT_CONTROLLER_BASE_ADDRESS         ( 0xF8F01000 )
-#define configINTERRUPT_CONTROLLER_CPU_INTERFACE_OFFSET ( -0xf00 )
-#define configUNIQUE_INTERRUPT_PRIORITIES               32
+// #define configINTERRUPT_CONTROLLER_BASE_ADDRESS         ( XPAR_PS7_SCUGIC_0_DIST_BASEADDR )
+#define configINTERRUPT_CONTROLLER_BASE_ADDRESS (0xF8F01000)
+#define configINTERRUPT_CONTROLLER_CPU_INTERFACE_OFFSET (-0xf00)
+#define configUNIQUE_INTERRUPT_PRIORITIES 32
 
 #endif
 

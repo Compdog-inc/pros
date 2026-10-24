@@ -20,4 +20,4 @@
 #define PROS_VERSION_MINOR 2
 
 #define PROS_VERSION_PATCH 1
-#define PROS_VERSION_STRING "4.2.1-dirty.12.dfdfa93"
+#define PROS_VERSION_STRING "4.2.1-dirty.14.6ebdb68"

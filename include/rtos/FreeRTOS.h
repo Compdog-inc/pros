@@ -28,6 +28,10 @@
 #ifndef INC_FREERTOS_H
 #define INC_FREERTOS_H
 
+#define TICK_TYPE_WIDTH_16_BITS    0
+#define TICK_TYPE_WIDTH_32_BITS    1
+#define TICK_TYPE_WIDTH_64_BITS    2
+
 /*
  * Include the generic headers required for the FreeRTOS port being used.
  */

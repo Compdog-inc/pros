@@ -39,6 +39,8 @@
 #include <winsock.h>
 #endif
 
+#include <timeapi.h>
+
 #ifdef _MSC_VER
 #include <timeapi.h>
 #pragma comment(lib, "winmm.lib")
@@ -266,6 +268,7 @@ BaseType_t xPortStartScheduler(void) {
 	SYSTEM_INFO xSystemInfo;
 
 	xPortWindowsPrintInit();
+	xPortDisableWindowsTimerThrottling();
 
 	/* This port runs windows threads with extremely high priority.  All the
 	 * threads execute on the same core - to prevent locking up the host only start
@@ -704,4 +707,20 @@ void __sinit(struct _reent* s) {
 	s->_stderr = stderr;
 	s->_putchar = putchar;
 	s->_getchar = getchar;
+}
+
+#ifndef PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION
+#define PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION 0x4
+#endif
+
+void xPortDisableWindowsTimerThrottling(void) {
+	PROCESS_POWER_THROTTLING_STATE state = {0};
+
+	state.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
+	state.ControlMask = PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION;
+	state.StateMask = 0;  // Explicitly DISABLE timer throttling.
+
+	SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, &state, sizeof(state));
+
+	timeBeginPeriod(1);
 }

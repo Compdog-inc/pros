@@ -243,6 +243,8 @@ extern struct _reent* _REENT;
 
 BaseType_t xPortWindowsPrintInit(void);
 
+void xPortDisableWindowsTimerThrottling(void);
+
 #ifdef __cplusplus
 }
 #endif
